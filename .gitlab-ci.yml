@@ -1,0 +1,55 @@
+stages:          # List of stages for jobs, and their order of execution
+  - build
+  - test
+  - dast
+  - review
+  - deploy
+
+unit-test-job:   # This job runs in the test stage.
+  stage: test    # It only starts when the job in the build stage completes successfully.
+  script:
+    - echo "Running unit tests... This will take about 60 seconds."
+    - echo "Code coverage is 90%"
+
+
+build-and-push-docker-image:
+  stage: build
+  image: docker:20.10.17
+  services:
+  - docker:20.10.17-dind
+  variables:
+    IMAGE: $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHA
+    DOCKER_TLS_CERTDIR: ""
+  script:
+  - docker build --tag $IMAGE .
+  - docker login --username $CI_REGISTRY_USER --password $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  - docker push $IMAGE  
+
+
+include:
+- template: Security/SAST.gitlab-ci.yml
+- template: Security/Container-Scanning.gitlab-ci.yml
+- template: DAST.gitlab-ci.yml
+- template: Security/Secret-Detection.gitlab-ci.yml
+- template: Security/License-Scanning.gitlab-ci.yml
+- template: Code-Quality.gitlab-ci.yml
+
+#- template: Security/Dependency-Scanning.gitlab-ci.yml
+
+variables:
+  DS_EXCLUDED_ANALYZERS: "gemnasium"
+  DAST_WEBSITE: https://example.com
+  DOCKER_TLS_CERTDIR: "/certs"
+  SECRET_DETECTION_EXCLUDED_PATHS: tests/
+
+review-job:   
+  stage: review    
+  script:
+    - echo "Running review"
+    
+
+deploy-job:      # This job runs in the deploy stage.
+  stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
+  script:
+    - echo "Deploying application..."
+    - echo "Application successfully deployed."
